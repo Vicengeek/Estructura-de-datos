@@ -1,0 +1,121 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+#define MAX_LINEAS 100
+#define MAX_PALABRAS 1000
+#define MAX_LONG 100
+
+// Estructura para el índice invertido
+typedef struct {
+    char palabra[MAX_LONG];
+    int lineas[MAX_LINEAS];
+    int cantidad_lineas;
+} EntradaIndice;
+
+EntradaIndice indice[MAX_PALABRAS];
+int total_palabras = 0;
+
+// Stopwords
+char stopwords[100][MAX_LONG];
+int total_stopwords = 0;
+
+// Función para cargar stopwords
+void cargar_stopwords(const char* archivo) {
+    FILE* f = fopen(archivo, "r");
+    if (!f) {
+        perror("No se pudo abrir stopwords.txt");
+        exit(1);
+    }
+    while (fgets(stopwords[total_stopwords], MAX_LONG, f)) {
+        stopwords[total_stopwords][strcspn(stopwords[total_stopwords], "\r\n")] = 0; // quitar salto
+        total_stopwords++;
+    }
+    fclose(f);
+}
+
+// Verifica si una palabra es una stopword
+int es_stopword(const char* palabra) {
+    for (int i = 0; i < total_stopwords; i++) {
+        if (strcmp(stopwords[i], palabra) == 0) return 1;
+    }
+    return 0;
+}
+
+// Convierte a minúsculas
+void a_minusculas(char* str) {
+    for (; *str; ++str) *str = tolower(*str);
+}
+
+// Agrega una palabra al índice
+void agregar_a_indice(const char* palabra, int linea) {
+    for (int i = 0; i < total_palabras; i++) {
+        if (strcmp(indice[i].palabra, palabra) == 0) {
+            indice[i].lineas[indice[i].cantidad_lineas++] = linea;
+            return;
+        }
+    }
+    strcpy(indice[total_palabras].palabra, palabra);
+    indice[total_palabras].lineas[0] = linea;
+    indice[total_palabras].cantidad_lineas = 1;
+    total_palabras++;
+}
+
+void procesar_linea(char* linea, int numero_linea) {
+    char* token = strtok(linea, " ,.\t\n\r");
+    while (token != NULL) {
+        a_minusculas(token);
+        if (!es_stopword(token)) {
+            agregar_a_indice(token, numero_linea);
+        }
+        token = strtok(NULL, " ,.\t\n\r");
+    }
+}
+
+int main() {
+    cargar_stopwords("stopwords.txt");
+
+    FILE* f = fopen("documentos.txt", "r");
+    if (!f) {
+        perror("No se pudo abrir documentos.txt");
+        return 1;
+    }
+
+    char linea[MAX_LONG * 5];
+    int num_linea = 1;
+
+    while (fgets(linea, sizeof(linea), f)) {
+        procesar_linea(linea, num_linea);
+        num_linea++;
+    }
+
+    fclose(f);
+
+    // Consulta al usuario
+    char consulta[MAX_LONG];
+    while (1) {
+        printf("\n> Ingrese una palabra para buscar ('exit' para salir): ");
+        scanf("%s", consulta);
+        a_minusculas(consulta);
+        if (strcmp(consulta, "exit") == 0) break;
+
+        int encontrada = 0;
+        for (int i = 0; i < total_palabras; i++) {
+            if (strcmp(indice[i].palabra, consulta) == 0) {
+                encontrada = 1;
+                printf("La palabra '%s' aparece en las líneas: ", consulta);
+                for (int j = 0; j < indice[i].cantidad_lineas; j++) {
+                    printf("%d ", indice[i].lineas[j]);
+                }
+                printf("\n");
+                break;
+            }
+        }
+        if (!encontrada) {
+            printf("La palabra '%s' no se encontró.\n", consulta);
+        }
+    }
+
+    return 0;
+}
